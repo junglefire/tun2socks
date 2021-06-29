@@ -9,9 +9,19 @@
 #include <arpa/inet.h>
 #include <uv.h>
 
-#include "lwip_callback.h"
 #include "tun2socks.h"
+#include "common.h"
 #include "logger.h"
+
+// lwip raw api state
+typedef struct _echo_raw_api_state_t
+{
+	raw_api_status_e state;
+	u8_t retries;
+	struct tcp_pcb* pcb;
+	/* pbuf (chain) to recycle */
+	struct pbuf* packet_buffer;
+} echo_raw_api_state_t;
 
 class LWIPEchoCallback {
 public:
@@ -25,9 +35,9 @@ public:
 	static err_t tcp_poll_cb(void*, struct tcp_pcb*);
 	static void udp_recv_cb(void*, struct udp_pcb*, struct pbuf*, const ip_addr_t*, u16_t, const ip_addr_t*, u16_t);
 private:
-	static void __tcp_raw_close(struct tcp_pcb*, raw_state_t*);
-	static void __tcp_raw_state_free(raw_state_t*);
-	static void __tcp_raw_send(struct tcp_pcb*, raw_state_t*);
+	static void __tcp_raw_close(struct tcp_pcb*, echo_raw_api_state_t*);
+	static void __tcp_raw_state_free(echo_raw_api_state_t*);
+	static void __tcp_raw_send(struct tcp_pcb*, echo_raw_api_state_t*);
 private:
 	LWIPEchoCallback(const LWIPEchoCallback&);
 	LWIPEchoCallback& operator=(const LWIPEchoCallback&);

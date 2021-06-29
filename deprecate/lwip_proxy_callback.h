@@ -18,12 +18,10 @@ public:
 	LWIPProxyCallback() {};
 	~LWIPProxyCallback() {};
 public:
-	static err_t tcp_accept_cb(void*, struct tcp_pcb*, err_t);
 	static err_t tcp_recv_cb(void*, struct tcp_pcb*, struct pbuf*, err_t);
 	static err_t tcp_sent_cb(void*, struct tcp_pcb*, u16_t);
 	static void tcp_error_cb(void*, err_t);
 	static err_t tcp_poll_cb(void*, struct tcp_pcb*);
-	static void udp_recv_cb(void*, struct udp_pcb*, struct pbuf*, const ip_addr_t*, u16_t, const ip_addr_t*, u16_t);
 private:
 	static void __tcp_raw_close(struct tcp_pcb*, proxy_state_t*);
 	static void __tcp_raw_state_free(proxy_state_t*);

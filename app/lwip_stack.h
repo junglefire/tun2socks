@@ -27,6 +27,8 @@ public:
 	int input(u8_t* data, int len);
 	int finish();
 	void restart_timeouts();
+	LWIPStack(const LWIPStack&) = delete;
+	LWIPStack& operator=(const LWIPStack&) = delete;
 private:
 	ipver __peek_ipver(u8_t*);
 	proto __peek_nextproto(ipver, u8_t*, int);
@@ -38,8 +40,9 @@ public:
 protected:
 	uv_timer_t* timeout_handler;
 private:
-	LWIPStack(const LWIPStack&);
-	LWIPStack& operator=(const LWIPStack&);
+	// 以下是两个工厂方法，接收新的连接，创建新的lwip的句柄
+	static err_t tcp_accept_new_client_cb(void*, struct tcp_pcb*, err_t);	
+	static void udp_recv_new_message_cb(void*, struct udp_pcb*, struct pbuf*, const ip_addr_t*, u16_t, const ip_addr_t*, u16_t);
 };
 
 

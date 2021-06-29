@@ -20,16 +20,16 @@ err_t LWIPEchoCallback::tcp_accept_cb(void* arg, struct tcp_pcb* newpcb, err_t e
 		LOCAL_IP(newpcb), LOCAL_PORT(newpcb), REMOTE_IP(newpcb), REMOTE_PORT(newpcb), newpcb);
 
 	err_t ret_err;
-	raw_state_t* rs = (raw_state_t*)mem_malloc(sizeof(raw_state_t));
+	echo_raw_api_state_t* rs = (echo_raw_api_state_t*)mem_malloc(sizeof(echo_raw_api_state_t));
 	if (rs == NULL) {
 		error("allocate raw api state failed, abort!");
 		return ERR_MEM;
 	}
 
-	rs->state = LRS_ACCEPTED;
+	rs->state = raw_api_status_e::ACCEPTED;
 	rs->pcb = newpcb;
 	rs->retries = 0;
-	rs->p = NULL;
+	rs->packet_buffer = NULL;
 	// pass newly allocated `rs` to our callbacks
 	tcp_arg(newpcb, rs);
 	tcp_recv(newpcb, LWIPEchoCallback::tcp_recv_cb);
@@ -46,13 +46,13 @@ err_t LWIPEchoCallback::tcp_recv_cb(void* arg, struct tcp_pcb* tpcb, struct pbuf
 	LWIP_ASSERT("arg != NULL", arg != NULL);
 	
 	err_t ret_err;
-	raw_state_t* rs = (raw_state_t*)arg;
+	echo_raw_api_state_t* rs = (echo_raw_api_state_t*)arg;
 
 	// 如果pbuf为空，说明客户端已经断开连接，参考lwip/tpc.c文件中关于`tcp_recv()`的注释
 	if (p == NULL) {
 		error("client disconnct...");
-		rs->state = LRS_CLOSING;
-		if(rs->p == NULL) {
+		rs->state = raw_api_status_e::CLOSING;
+		if(rs->packet_buffer == NULL) {
 			// we're done sending, close it
 			LWIPEchoCallback::__tcp_raw_close(tpcb, rs);
 		} else {
@@ -64,22 +64,22 @@ err_t LWIPEchoCallback::tcp_recv_cb(void* arg, struct tcp_pcb* tpcb, struct pbuf
 		error("cleanup, for unknown reason");
 		LWIP_ASSERT("no pbuf expected here", p == NULL);
 		ret_err = err;
-	} else if(rs->state == LRS_ACCEPTED) {
+	} else if(rs->state == raw_api_status_e::ACCEPTED) {
 		// first data chunk in p->payload
-		rs->state = LRS_RECEIVED;
+		rs->state = raw_api_status_e::RECEIVED;
 		// store reference to incoming pbuf (chain)
-		rs->p = p;
+		rs->packet_buffer = p;
 		LWIPEchoCallback::__tcp_raw_send(tpcb, rs);
 		ret_err = ERR_OK;
-	} else if (rs->state == LRS_RECEIVED) {
+	} else if (rs->state == raw_api_status_e::RECEIVED) {
 		// read some more data
-		if(rs->p == NULL) {
-			rs->p = p;
+		if(rs->packet_buffer == NULL) {
+			rs->packet_buffer = p;
 			LWIPEchoCallback::__tcp_raw_send(tpcb, rs);
 		} else {
 			struct pbuf* ptr;
 			// chain pbufs to the end of what we recv'ed previously
-			ptr = rs->p;
+			ptr = rs->packet_buffer;
 			pbuf_cat(ptr,p);
 		}
 		ret_err = ERR_OK;
@@ -99,15 +99,15 @@ err_t LWIPEchoCallback::tcp_sent_cb(void* arg, struct tcp_pcb* tpcb, u16_t len) 
 
 	LWIP_UNUSED_ARG(len);
 
-	raw_state_t* rs = (raw_state_t*)arg;
+	echo_raw_api_state_t* rs = (echo_raw_api_state_t*)arg;
 	rs->retries = 0;
-	if(rs->p != NULL) {
+	if(rs->packet_buffer != NULL) {
 		// still got pbufs to send
 		tcp_sent(tpcb, tcp_sent_cb);
 		LWIPEchoCallback::__tcp_raw_send(tpcb, rs);
 	} else {
 		// no more pbufs to send
-		if(rs->state == LRS_CLOSING) {
+		if(rs->state == raw_api_status_e::CLOSING) {
 			LWIPEchoCallback::__tcp_raw_close(tpcb, rs);
 		}
 	}
@@ -117,21 +117,21 @@ err_t LWIPEchoCallback::tcp_sent_cb(void* arg, struct tcp_pcb* tpcb, u16_t len) 
 // 出错时回调
 void LWIPEchoCallback::tcp_error_cb(void *arg, err_t err) {
 	LWIP_UNUSED_ARG(err);
-	raw_state_t* rs = (raw_state_t*)arg;
+	echo_raw_api_state_t* rs = (echo_raw_api_state_t*)arg;
 	LWIPEchoCallback::__tcp_raw_state_free(rs);
 }
 
 // 定时任务
 err_t LWIPEchoCallback::tcp_poll_cb(void *arg, struct tcp_pcb *tpcb) {
 	err_t ret_err;
-	raw_state_t* rs = (raw_state_t*)arg;
+	echo_raw_api_state_t* rs = (echo_raw_api_state_t*)arg;
 	if (rs != NULL) {
-		if (rs->p != NULL) {
+		if (rs->packet_buffer != NULL) {
 			// there is a remaining pbuf (chain)
 			LWIPEchoCallback::__tcp_raw_send(tpcb, rs);
 		} else {
 			// no remaining pbuf (chain)
-			if(rs->state == LRS_CLOSING) {
+			if(rs->state == raw_api_status_e::CLOSING) {
 				LWIPEchoCallback::__tcp_raw_close(tpcb, rs);
 			}
 		}
@@ -145,7 +145,7 @@ err_t LWIPEchoCallback::tcp_poll_cb(void *arg, struct tcp_pcb *tpcb) {
 }
 
 // 关闭raw api，删除状态信息存储，关闭pcb
-void LWIPEchoCallback::__tcp_raw_close(struct tcp_pcb* tpcb, raw_state_t* rs) {
+void LWIPEchoCallback::__tcp_raw_close(struct tcp_pcb* tpcb, echo_raw_api_state_t* rs) {
 	info("destroy connection `%s:%d`->`%s:%d`, &tcp_pcb: %p", 
 		LOCAL_IP(tpcb), LOCAL_PORT(tpcb), REMOTE_IP(tpcb), REMOTE_PORT(tpcb), tpcb);
 	tcp_arg(tpcb, NULL);
@@ -158,33 +158,33 @@ void LWIPEchoCallback::__tcp_raw_close(struct tcp_pcb* tpcb, raw_state_t* rs) {
 }
 
 // 释放状态信息
-void LWIPEchoCallback::__tcp_raw_state_free(raw_state_t* rs) {
+void LWIPEchoCallback::__tcp_raw_state_free(echo_raw_api_state_t* rs) {
 	if (rs != NULL) {
-		if (rs->p) {
+		if (rs->packet_buffer) {
 			// free the buffer chain if present
-			pbuf_free(rs->p);
+			pbuf_free(rs->packet_buffer);
 		}
 		mem_free(rs);
 	}
 }
 
 // 发送数据
-void LWIPEchoCallback::__tcp_raw_send(struct tcp_pcb* tpcb, raw_state_t* rs) {
+void LWIPEchoCallback::__tcp_raw_send(struct tcp_pcb* tpcb, echo_raw_api_state_t* rs) {
 	struct pbuf* ptr;
 	err_t wr_err = ERR_OK;
 
-	while ((wr_err == ERR_OK) && (rs->p != NULL) && (rs->p->len <= tcp_sndbuf(tpcb))) {
-		ptr = rs->p;
+	while ((wr_err == ERR_OK) && (rs->packet_buffer != NULL) && (rs->packet_buffer->len <= tcp_sndbuf(tpcb))) {
+		ptr = rs->packet_buffer;
 		// enqueue data for transmission
 		wr_err = tcp_write(tpcb, ptr->payload, ptr->len, 1);
 		if (wr_err == ERR_OK) {
 			u16_t plen;
 			plen = ptr->len;
 			// continue with next pbuf in chain (if any)
-			rs->p = ptr->next;
-			if(rs->p != NULL) {
+			rs->packet_buffer = ptr->next;
+			if(rs->packet_buffer != NULL) {
 				// new reference!
-				pbuf_ref(rs->p);
+				pbuf_ref(rs->packet_buffer);
 			}
 			// chop first pbuf from chain
 			pbuf_free(ptr);
@@ -192,7 +192,7 @@ void LWIPEchoCallback::__tcp_raw_send(struct tcp_pcb* tpcb, raw_state_t* rs) {
 			tcp_recved(tpcb, plen);
 		} else if(wr_err == ERR_MEM) {
 			// we are low on memory, try later / harder, defer to poll
-			rs->p = ptr;
+			rs->packet_buffer = ptr;
 		} else {
 			/* other problem ?? */
 		}

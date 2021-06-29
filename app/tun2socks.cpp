@@ -29,16 +29,16 @@ int Tun2Socks::start() {
 		return -1;
 	}
 
-	int ret = uv_poll_init(this->loop, this->poll, this->tun_fd);
+	int ret = uv_poll_init_socket(this->loop, this->poll, this->tun_fd);
 	if (ret != 0) {
-		error("uv_poll_init() failed, err: %s", uv_strerror(errno));
+		error("uv_poll_init_socket() failed, err: %s", uv_strerror(errno));
 		return -1;
 	}
 
 	this->poll->data = this;
-	ret = uv_poll_start(this->poll, UV_READABLE/*|UV_WRITABLE|UV_PRIORITIZED|UV_DISCONNECT*/, &Tun2Socks::on_poll_cb);
+	ret = uv_poll_start(this->poll, UV_READABLE|UV_WRITABLE/*|UV_PRIORITIZED|UV_DISCONNECT*/, &Tun2Socks::on_poll_cb);
 	if (ret != 0) {
-		error("uv_poll_init() failed, err: %s", uv_strerror(errno));
+		error("uv_poll_start() failed, err: %s", uv_strerror(errno));
 		return -1;
 	}
 

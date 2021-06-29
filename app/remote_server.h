@@ -13,27 +13,41 @@
 #include <string>
 
 #include "nat_table.h"
-#include "tun2socks.h"
+#include "common.h"
 #include "logger.h"
 
 class RemoteServer {
 public:
-	RemoteServer(uv_loop_t*, const char*, int, NatTable*);
-	~RemoteServer();
-	int connect();
-	int get_status();
+	RemoteServer();
+	~RemoteServer() = default;
+	int connect(struct tcp_pcb*, NatTable*);
+	int disconnect();
+	int send(const char*, size_t);
+	int send2(const char*, size_t);
+	remote_server_status_e get_status();
+	RemoteServer(const RemoteServer&) = delete;
+	RemoteServer& operator=(const RemoteServer&) = delete;
+private:
+	static void __alloc_cb(uv_handle_t*, size_t, uv_buf_t*);
+	int __lwip_to_realserver();
+	int __realserver_to__lwip();
+private:
+	remote_server_status_e status;	// 远程服务器连接状态
+	struct tcp_pcb* newpcb;			// lwip句柄
+	NatTable* nat_table;			// NAT表
+	std::string cache_buffer;		// 当远程服务器不可用时，缓存消息随后发送
+	const char* msg_ptr;			// 待发送的消息指针
+	size_t msg_size;				// 待发送的消息大小
+private:
+	std::string server_ip;			// 服务器IP
+	std::string real_ip;			// NAT转换之后的真实IP
+	int server_port;				// 服务器端口
 private:
 	uv_loop_t* loop;
-	NatTable* nat_table;
-	std::string server_ip;
-	std::string real_ip;
-	int server_port;
-	uv_tcp_t* uv_client;
-	uv_connect_t* uv_connect;
-	int status;
-private:
-	RemoteServer(const RemoteServer&);
-	RemoteServer& operator=(const RemoteServer&);
+	uv_tcp_t uv_client;
+	uv_connect_t uv_connect;
+	uv_shutdown_t uv_shutdown_req;
+	uv_write_t uv_write_req;
 };
 
 #endif // TUN2SOCKS_REMOTE_SERVER_H__

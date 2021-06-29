@@ -43,7 +43,7 @@ public:
 	TunDevice(const TunDevice&) = delete;
 private:
 	int __open_utun(); 
-	void __set_non_block(bool enable=false); 
+	void __set_non_block(bool enable=true); 
 public:
 	int tun_id;
 	int tun_fd;

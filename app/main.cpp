@@ -43,12 +43,15 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
+#ifdef ZLOG_MESSAGE
+	printf("HHHH\n");
 	ret = dzlog_init(ZLOG_CONF, "tun2socks");
 	if (ret != 0) {
 		fprintf(stderr, "zlog load configuration file `%s` failed\n", ZLOG_CONF);
 		return -1;
 	}
-
+#endif //ZLOG_MESSAGE
+	
 	TunDevice tun(args.tun_id, args.tun_ip, args.mtu);
 	tun.open();
 

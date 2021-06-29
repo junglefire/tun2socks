@@ -3,6 +3,7 @@ PROJECT(tun2socks)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 
 # ADD_DEFINITIONS(-DSIMPLE_MESSAGE)
+# ADD_DEFINITIONS(-DDETAIL_MESSAGE)
 ADD_DEFINITIONS(-DZLOG_MESSAGE)
 ADD_DEFINITIONS(-w)
 
@@ -11,7 +12,7 @@ ADD_DEFINITIONS(-w)
 # 2. 是否设置测试IP和网关
 ADD_DEFINITIONS(-D__TEST_TUN2SOCKS__)
 # 3. 是否显示LWIP接收的内容
-# ADD_DEFINITIONS(-D__SHOW_LWIP_RECV_MSG__)
+ADD_DEFINITIONS(-D__SHOW_LWIP_RECV_MSG__)
 
 
 SET(CMAKE_C_FLAGS_DEBUG "-O0 -Wall -g -ggdb")
@@ -57,7 +58,7 @@ add_library(lwipcore ${LWIPNOAPPS_SRCS})
 ###########################   application  ####################################
 ###############################################################################
 
-SET(T2S app/main.cpp app/tun2socks.cpp app/lwip_stack.cpp app/lwip_echo_callback.cpp app/lwip_proxy_callback.cpp app/lwip_timer.cpp app/remote_server.cpp)
+SET(T2S app/main.cpp app/tun2socks.cpp app/lwip_stack.cpp app/lwip_proxy.cpp app/lwip_echo_callback.cpp app/lwip_timer.cpp app/remote_server.cpp)
 ADD_EXECUTABLE(tun2socks ${T2S})
 TARGET_LINK_LIBRARIES(tun2socks base uv zlog lwipcore)
 

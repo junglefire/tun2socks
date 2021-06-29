@@ -1,5 +1,5 @@
-#include "lwip_proxy_callback.h"
 #include "lwip_echo_callback.h"
+#include "lwip_proxy.h"
 #include "lwip_stack.h"
 #include "nat_table.h"
 
@@ -58,14 +58,117 @@ int LWIPStack::init() {
 
 	if (NatTable::get_instance()->is_nat_active()) {
 		info("register lwip proxy callback...");
-		tcp_accept(this->tpcb, LWIPProxyCallback::tcp_accept_cb);
-		udp_recv(this->upcb, LWIPProxyCallback::udp_recv_cb, NULL);
+		tcp_accept(this->tpcb, LWIPStack::tcp_accept_new_client_cb);
+		udp_recv(this->upcb, LWIPStack::udp_recv_new_message_cb, NULL);
 	} else {
 		info("register lwip echo callback...");
 		tcp_accept(this->tpcb, LWIPEchoCallback::tcp_accept_cb);
 		udp_recv(this->upcb, LWIPEchoCallback::udp_recv_cb, NULL);
 	}
 	return 0;
+}
+
+// 接收新的连接，创建新的lwip的句柄
+// 当client与lwip stack完成三次握手之后回调函数
+err_t LWIPStack::tcp_accept_new_client_cb(void* arg, struct tcp_pcb* newpcb, err_t err) {
+	if(err != ERR_OK || (newpcb == NULL)) {
+		error("tcp_accept_new_client_cb() failed, errno: %d", err);
+		return ERR_VAL; //Illegal value;
+	}
+
+	LWIP_UNUSED_ARG(arg);
+
+	// Unless this pcb should have NORMAL priority, set its priority now. When running out of pcbs, 
+	// low priority pcbs can be aborted to create new pcbs of higher priority. 
+	tcp_setprio(newpcb, TCP_PRIO_MIN);
+
+	info("LWIPStack::tcp_accept_new_client_cb(): new connection `%s:%d`-->`%s:%d`, &tcp_pcb: %p", 
+		LOCAL_IP(newpcb), LOCAL_PORT(newpcb), REMOTE_IP(newpcb), REMOTE_PORT(newpcb), newpcb);
+
+	err_t ret;
+	LWIPProxy* proxy = new LWIPProxy();
+	proxy->raw_api_status = raw_api_status_e::ACCEPTED;
+	proxy->newpcb = newpcb;
+	proxy->retries = 0;
+	proxy->pbuf_ptr = nullptr;
+
+	// 与远程服务器建立连接
+	proxy->connect_remote_server(newpcb, NatTable::get_instance());
+
+	// 0. 将`proxy`变量作为回调函数的参数`arg`
+	tcp_arg(newpcb, proxy);
+
+	// 1. 设置接收回调函数
+	tcp_recv(newpcb, [](void* arg, struct tcp_pcb* tpcb, struct pbuf* p, err_t err)->err_t {
+		// 未知错误，退出
+		if(err != ERR_OK) { 
+			error("cleanup, for unknown reason");
+			LWIP_ASSERT("no pbuf expected here", p == NULL);
+			return err;
+		}
+		LWIPProxy* proxy = (LWIPProxy*)arg;
+		return proxy->tcp_recv_cb(p);
+	});
+	
+	// 2. 设置错误处理回调，因为pcb结构可能已经被删除了，所以在处理错误的回调函数中pcb参数不可能传递进来
+	tcp_err(newpcb, [](void *arg, err_t err){
+		LWIPProxy* proxy = (LWIPProxy*)arg;
+		return proxy->tcp_error_cb(err);
+	});
+	
+	// 3. 设置LWIP定时器
+	tcp_poll(newpcb, [](void *arg, struct tcp_pcb *tpcb) {
+		LWIPProxy* proxy = (LWIPProxy*)arg;
+		return proxy->tcp_poll_cb();
+	}, 0);
+	
+	// 4. 设置发送完成回调
+	tcp_sent(newpcb, [](void* arg, struct tcp_pcb* tpcb, u16_t len) {
+		LWIPProxy* proxy = (LWIPProxy*)arg;
+		return proxy->tcp_sent_cb(len);	
+	});
+	return ERR_OK;
+}
+
+void LWIPStack::udp_recv_new_message_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port, const ip_addr_t *dest_addr, u16_t dest_port) {
+	do {
+		if (pcb == NULL) {
+			break;
+		}
+		info("send udp packet from: `%s:%d`-->`%s:%d`", ipaddr_ntoa(addr), port, ipaddr_ntoa(dest_addr), dest_port);
+		/*
+		if (!udp_conn_map_isinited()) {
+			set_udp_conn_map(createHashMap(NULL, _equal_udp));
+		}
+
+		struct sockaddr_in dst_addr{};
+		dst_addr = get_socket_address(ipaddr_ntoa(dest_addr), (u16_t) dest_port);
+
+		char *map_key = get_address_port(dest_addr, port, dest_port);
+		udp_conn *conn = (udp_conn *)(udp_conn_map_get(map_key));
+		mem_free(map_key);
+		if(conn == NULL) {
+			if (get_udp_handler() == NULL) {
+				LOG("must register a UDP connection handler\n");
+				break;
+			}
+			conn = new_udp_conn(pcb, get_udp_handler(), *addr, port, *dest_addr, dest_port,
+								dst_addr);
+			if(conn == NULL) {
+				break;
+			}
+		}
+		if (p->tot_len == p->len) {
+			conn->receive_to(p->payload, p->tot_len, dst_addr);
+		} else {
+			void *buf = mem_malloc(p->tot_len);
+			pbuf_copy_partial(p, buf, p->tot_len, 0);
+			conn->receive_to(buf, p->tot_len, dst_addr);
+			mem_free(buf);
+		}
+	*/
+	} while (0);
+	pbuf_free(p);
 }
 
 // Write writes IP packets to the stack.

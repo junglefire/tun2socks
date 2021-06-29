@@ -3,50 +3,6 @@
 
 // LWIP错误码参考：https://github.com/lwip-tcpip/lwip/blob/master/src/include/lwip/err.h
 
-// 当client与lwip stack完成三次握手之后回调函数
-err_t LWIPProxyCallback::tcp_accept_cb(void* arg, struct tcp_pcb* newpcb, err_t err) {
-	if(err != ERR_OK || (newpcb == NULL)) {
-		error("tcp_accept_cb() failed, errno: %d", err);
-		return ERR_VAL; //Illegal value;
-	}
-
-	LWIP_UNUSED_ARG(arg);
-
-	// Unless this pcb should have NORMAL priority, set its priority now.
-	// When running out of pcbs, low priority pcbs can be aborted to create
-	// new pcbs of higher priority. 
-	tcp_setprio(newpcb, TCP_PRIO_MIN);
-
-	info("LWIPProxyCallback::tcp_accept_cb(): new connection `%s:%d`-->`%s:%d`, &tcp_pcb: %p", 
-		LOCAL_IP(newpcb), LOCAL_PORT(newpcb), REMOTE_IP(newpcb), REMOTE_PORT(newpcb), newpcb);
-
-	err_t ret_err;
-	proxy_state_t* ps = (proxy_state_t*)mem_malloc(sizeof(proxy_state_t));
-	if (ps == NULL) {
-		error("allocate raw api state failed, abort!");
-		return ERR_MEM;
-	}
-
-	ps->state = LRS_ACCEPTED;
-	ps->pcb = newpcb;
-	ps->retries = 0;
-	ps->p = nullptr;
-	ps->remote_server = nullptr;
-
-	// 与远程服务器建立连接
-	RemoteServer* rs = new RemoteServer(uv_default_loop(), REMOTE_IP(newpcb), REMOTE_PORT(newpcb), NatTable::get_instance());
-	rs->connect();
-	ps->remote_server = rs;
-
-	// pass newly allocated `ps` to our callbacks
-	tcp_arg(newpcb, ps);
-	tcp_recv(newpcb, LWIPProxyCallback::tcp_recv_cb);
-	tcp_err(newpcb, LWIPProxyCallback::tcp_error_cb);
-	tcp_poll(newpcb, LWIPProxyCallback::tcp_poll_cb, 0);
-	tcp_sent(newpcb, LWIPProxyCallback::tcp_sent_cb);
-	return ERR_OK;
-}
-
 // 接收client的信息后回调
 err_t LWIPProxyCallback::tcp_recv_cb(void* arg, struct tcp_pcb* tpcb, struct pbuf* p, err_t err) {
 	info("LWIPProxyCallback::tcp_recv_cb(): `%s:%d`->`%s:%d`, err: %d, &tcp_pcb: %p, &pbuf: %p", 
@@ -270,45 +226,5 @@ void LWIPProxyCallback::__tcp_raw_send_2(struct tcp_pcb* tpcb, proxy_state_t* ps
 	}
 }
 
-void LWIPProxyCallback::udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port, const ip_addr_t *dest_addr, u16_t dest_port) {
-	do {
-		if (pcb == NULL) {
-			break;
-		}
-		info("send udp packet from: `%s:%d`-->`%s:%d`", ipaddr_ntoa(addr), port, ipaddr_ntoa(dest_addr), dest_port);
-		/*
-		if (!udp_conn_map_isinited()) {
-			set_udp_conn_map(createHashMap(NULL, _equal_udp));
-		}
-
-		struct sockaddr_in dst_addr{};
-		dst_addr = get_socket_address(ipaddr_ntoa(dest_addr), (u16_t) dest_port);
-
-		char *map_key = get_address_port(dest_addr, port, dest_port);
-		udp_conn *conn = (udp_conn *)(udp_conn_map_get(map_key));
-		mem_free(map_key);
-		if(conn == NULL) {
-			if (get_udp_handler() == NULL) {
-				LOG("must register a UDP connection handler\n");
-				break;
-			}
-			conn = new_udp_conn(pcb, get_udp_handler(), *addr, port, *dest_addr, dest_port,
-								dst_addr);
-			if(conn == NULL) {
-				break;
-			}
-		}
-		if (p->tot_len == p->len) {
-			conn->receive_to(p->payload, p->tot_len, dst_addr);
-		} else {
-			void *buf = mem_malloc(p->tot_len);
-			pbuf_copy_partial(p, buf, p->tot_len, 0);
-			conn->receive_to(buf, p->tot_len, dst_addr);
-			mem_free(buf);
-		}
-	*/
-	} while (0);
-	pbuf_free(p);
-}
 
 

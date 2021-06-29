@@ -1,5 +1,5 @@
-#ifndef BEEHIVE_H__
-#define BEEHIVE_H__
+#ifndef TUN2SOCKS_LOGGER_H__
+#define TUN2SOCKS_LOGGER_H__
 
 #include <strings.h>
 #include <stdio.h>
@@ -18,49 +18,41 @@
 
 #define DEBUG 1
 
-// print message detail
-#ifdef DETAIL_MESSAGE 
-#define info(fmt, args...) \
+#if defined DETAIL_MESSAGE 
+    #define info(fmt, args...) \
     do {\
         fprintf(stderr, "[info][%s:%d:%s()] " fmt "\n", __FILENAME__, __LINE__, __func__, ##args);\
     } while(0)
 
-#define debug(fmt, args...) \
+    #define debug(fmt, args...) \
     do {\
         if (DEBUG) fprintf(stderr, "[debug][%s:%d:%s()] " fmt "\n", __FILENAME__, __LINE__, __func__, ##args);\
     } while(0)
 
-#define error(fmt, args...) \
+    #define error(fmt, args...) \
     do {\
         fprintf(stderr, "[error][%s:%d:%s()] " fmt "\n", __FILENAME__, __LINE__, __func__, ##args);\
     } while(0)
-#endif
-
-// print simple message
-#ifdef SIMPLE_MESSAGE 
-#define info(fmt, args...) \
+#elif defined SIMPLE_MESSAGE 
+    #define info(fmt, args...) \
     do {\
         fprintf(stderr, "[info] " fmt "\n", ##args);\
     } while(0)
 
-#define debug(fmt, args...) \
+    #define debug(fmt, args...) \
     do {\
         if (DEBUG) fprintf(stderr, "[debug] " fmt "\n", ##args);\
     } while(0)
 
-#define error(fmt, args...) \
+    #define error(fmt, args...) \
     do {\
         fprintf(stderr, "[error] " fmt "\n", ##args);\
     } while(0)
-#endif
+#elif defined ZLOG_MESSAGE
+    #include <zlog.h>
+    #define info dzlog_info
+    #define debug dzlog_debug
+    #define error dzlog_error
+#endif 
 
-// using zlog lib
-#ifdef ZLOG_MESSAGE
-#include <zlog.h>
-
-#define info dzlog_info
-#define debug dzlog_debug
-#define error dzlog_error
-#endif // ZLOG_MESSAGE
-
-#endif
+#endif//TUN2SOCKS_LOGGER_H__
