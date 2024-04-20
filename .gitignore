@@ -1,0 +1,13 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+bin/
+data/
+tmp/
+temp/
+cmake_install.cmake
+logs/
+*.zip
+*.o
+pkg/packages/
+__pycache__/
